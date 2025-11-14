@@ -73,9 +73,9 @@ specialization = Std(accuracies) / Mean(accuracies)
 ### QD Map Layout (Correct Usage)
 
 ```
-       BD2: Prediction Concentration
+       BD2: Max Class Disparity
          ↑
-    1.0  |  ●  ●  ●    ← Different prediction patterns
+    1.0  |  ●  ●  ●    ← Larger gaps between classes
          |  ●  ●  ●  ●
     0.5  |  ●  ●  ●  ●  ●
          |  ●  ●  ●  ●  ●  ●
@@ -111,10 +111,11 @@ Color/Objective: Accuracy (FITNESS)
 You can use different combinations:
 
 **2D Examples**:
-1. Variance × Concentration
-2. Variance × Imbalance Adaptation
-3. Specialization × Entropy
-4. Concentration × Imbalance Adaptation
+1. Variance × Max Disparity (default in examples)
+2. Variance × Concentration
+3. Variance × Imbalance Adaptation
+4. Specialization × Entropy
+5. Concentration × Imbalance Adaptation
 
 **3D+ Examples** (with pyribs CVTArchive):
 - Variance × Concentration × Entropy
@@ -220,10 +221,11 @@ from ribs.schedulers import Scheduler
 from libcll.metrics import compute_error_asymmetry
 
 # Create QD archive with 2D behavior space
+# Using variance and max_disparity as behavior descriptors
 archive = GridArchive(
     solution_dim=model_parameters,
     dims=(50, 50),  # 50x50 grid
-    ranges=[(0.0, 1.0), (0.0, 0.2)],  # [accuracy, variance]
+    ranges=[(0.0, 0.2), (0.0, 1.0)],  # [variance, max_disparity]
 )
 
 # During evaluation
@@ -233,8 +235,8 @@ metrics = compute_error_asymmetry(predictions, targets, num_classes)
 # Add to archive
 archive.add(
     solution=model.parameters(),
-    objective=metrics.overall_accuracy,  # Maximize accuracy
-    measures=[metrics.overall_accuracy, metrics.accuracy_variance]  # BDs
+    objective=metrics.overall_accuracy,  # Maximize accuracy (FITNESS)
+    measures=[metrics.accuracy_variance, metrics.max_disparity]  # BDs
 )
 ```
 

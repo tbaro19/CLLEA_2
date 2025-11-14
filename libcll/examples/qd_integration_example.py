@@ -31,8 +31,8 @@ from libcll.metrics.visualize import plot_qd_map_2d, plot_qd_heatmap
 
 def create_qd_archive_for_cll(
     solution_dim: int,
-    accuracy_range: Tuple[float, float] = (0.0, 1.0),
     variance_range: Tuple[float, float] = (0.0, 0.2),
+    disparity_range: Tuple[float, float] = (0.0, 1.0),
     grid_dims: Tuple[int, int] = (50, 50),
 ) -> GridArchive:
     """Create a QD archive for continual learning with Error Asymmetry BDs.
@@ -41,10 +41,10 @@ def create_qd_archive_for_cll(
     ----------
     solution_dim : int
         Dimension of the solution space (e.g., number of model parameters)
-    accuracy_range : tuple
-        Range for overall accuracy (measure 1)
     variance_range : tuple
-        Range for accuracy variance (measure 2, BD)
+        Range for accuracy variance (BD1)
+    disparity_range : tuple
+        Range for max class disparity (BD2)
     grid_dims : tuple
         Grid dimensions for the archive
         
@@ -56,14 +56,14 @@ def create_qd_archive_for_cll(
     archive = GridArchive(
         solution_dim=solution_dim,
         dims=grid_dims,
-        ranges=[accuracy_range, variance_range],
+        ranges=[variance_range, disparity_range],
         seed=42,
     )
     
     print(f"Created QD Archive:")
     print(f"  Grid: {grid_dims[0]}x{grid_dims[1]} = {grid_dims[0]*grid_dims[1]} cells")
-    print(f"  Accuracy range: {accuracy_range}")
-    print(f"  Variance range (BD): {variance_range}")
+    print(f"  Variance range (BD1): {variance_range}")
+    print(f"  Max Disparity range (BD2): {disparity_range}")
     print()
     
     return archive
@@ -97,7 +97,9 @@ def simulate_model_evaluation(
     overall_accuracy : float
         Overall test accuracy (objective)
     accuracy_variance : float
-        Variance of per-class accuracies (BD)
+        Variance of per-class accuracies (BD1)
+    max_disparity : float
+        Max difference between class accuracies (BD2)
     per_class_acc : np.ndarray
         Per-class accuracies
     """
@@ -124,11 +126,12 @@ def simulate_model_evaluation(
         mean_acc = per_class_acc.mean()
         per_class_acc = mean_acc + (per_class_acc - mean_acc) * 0.3
     
-    # Compute overall accuracy and variance
+    # Compute metrics
     overall_accuracy = float(per_class_acc.mean())
     accuracy_variance = float(per_class_acc.var())
+    max_disparity = float(per_class_acc.max() - per_class_acc.min())
     
-    return overall_accuracy, accuracy_variance, per_class_acc
+    return overall_accuracy, accuracy_variance, max_disparity, per_class_acc
 
 
 def run_qd_optimization_for_cll(
@@ -162,8 +165,8 @@ def run_qd_optimization_for_cll(
     # Create QD archive
     archive = create_qd_archive_for_cll(
         solution_dim=solution_dim,
-        accuracy_range=(0.0, 1.0),
         variance_range=(0.0, 0.2),
+        disparity_range=(0.0, 1.0),
         grid_dims=(50, 50),
     )
     
@@ -187,6 +190,7 @@ def run_qd_optimization_for_cll(
     # Tracking
     all_accuracies = []
     all_variances = []
+    all_disparities = []
     all_objectives = []
     
     # Main QD loop
@@ -200,19 +204,20 @@ def run_qd_optimization_for_cll(
         
         for solution in solutions:
             # Simulate model evaluation
-            accuracy, variance, per_class_acc = simulate_model_evaluation(
+            accuracy, variance, disparity, per_class_acc = simulate_model_evaluation(
                 solution, num_classes=num_classes
             )
             
             # Objective: maximize overall accuracy
             objectives.append(accuracy)
             
-            # Measures: [accuracy, variance]
-            measures.append([accuracy, variance])
+            # Behavior Descriptors: [variance, disparity]
+            measures.append([variance, disparity])
             
             # Track for visualization
             all_accuracies.append(accuracy)
             all_variances.append(variance)
+            all_disparities.append(disparity)
             all_objectives.append(accuracy)
         
         # Tell scheduler the results
@@ -254,41 +259,41 @@ def run_qd_optimization_for_cll(
     
     if len(df) > 0:
         # Extract measures
-        archive_accuracies = df["measures_0"].values
-        archive_variances = df["measures_1"].values
-        archive_objectives = df["objective"].values
+        archive_variances = df["measures_0"].values  # BD1: Variance
+        archive_disparities = df["measures_1"].values  # BD2: Max Disparity
+        archive_objectives = df["objective"].values  # Fitness: Overall Accuracy
         
         # Plot QD map
         plot_qd_map_2d(
-            accuracy=archive_accuracies,
-            behavior_descriptor=archive_variances,
+            accuracy=archive_variances,
+            behavior_descriptor=archive_disparities,
             values=archive_objectives,
-            xlabel="Overall Accuracy",
-            ylabel="Accuracy Variance (Error Asymmetry BD)",
-            title=f"QD Map: Error Asymmetry (Archive Coverage: {stats.coverage*100:.1f}%)",
+            xlabel="Accuracy Variance (BD1)",
+            ylabel="Max Class Disparity (BD2)",
+            title=f"QD Map: Error Asymmetry (Coverage: {stats.coverage*100:.1f}%)",
             save_path=str(output_path / "qd_map_archive.png"),
         )
         
         # Plot QD heatmap
         plot_qd_heatmap(
-            accuracy=archive_accuracies,
-            behavior_descriptor=archive_variances,
+            accuracy=archive_variances,
+            behavior_descriptor=archive_disparities,
             values=archive_objectives,
             bins=(50, 50),
-            xlabel="Overall Accuracy",
-            ylabel="Accuracy Variance (Error Asymmetry BD)",
-            title="QD Heatmap: Best Solutions in Each Cell",
+            xlabel="Accuracy Variance (BD1)",
+            ylabel="Max Class Disparity (BD2)",
+            title="QD Heatmap: Best Solutions (Color = Accuracy)",
             save_path=str(output_path / "qd_heatmap_archive.png"),
         )
         
         # Plot all evaluated solutions (including non-elites)
         plot_qd_map_2d(
-            accuracy=np.array(all_accuracies),
-            behavior_descriptor=np.array(all_variances),
+            accuracy=np.array(all_variances),
+            behavior_descriptor=np.array(all_disparities),
             values=np.array(all_objectives),
-            xlabel="Overall Accuracy",
-            ylabel="Accuracy Variance (Error Asymmetry BD)",
-            title="QD Map: All Evaluated Solutions",
+            xlabel="Accuracy Variance (BD1)",
+            ylabel="Max Class Disparity (BD2)",
+            title="QD Map: All Evaluated Solutions (Color = Accuracy)",
             save_path=str(output_path / "qd_map_all.png"),
         )
         

@@ -11,11 +11,8 @@ Supported Algorithms:
 Key Concepts:
 - FITNESS: Overall accuracy (to MAXIMIZE)
 - BEHAVIOR DESCRIPTORS (BDs): Characteristics with no clear good/bad
-  * Accuracy Variance: Class performance spread
-  * Prediction Concentration: Which classes model prefers
-  * Imbalance Adaptation: Correlation with class frequency
-  * Specialization Index: Generalist vs specialist tendency
-  * Performance Entropy: Uniformity of performance
+  * BD1 - Accuracy Variance: Class performance spread
+  * BD2 - Max Class Disparity: Largest gap between class accuracies
 """
 
 import numpy as np
@@ -408,7 +405,7 @@ def run_qd_algorithm(config: CMAQDConfig, output_dir: str = "qd_cma_output"):
                     sol, num_classes=config.num_classes
                 )
                 objectives_grad.append(fitness)
-                measures_grad.append([bds['variance'], bds['concentration']])
+                measures_grad.append([bds['variance'], bds['max_disparity']])
                 
                 # Compute jacobian (finite differences for demo)
                 grad_obj = np.zeros(len(sol))
@@ -433,8 +430,8 @@ def run_qd_algorithm(config: CMAQDConfig, output_dir: str = "qd_cma_output"):
                 sol, num_classes=config.num_classes
             )
             objectives.append(fitness)
-            # Use variance and concentration as BDs
-            measures.append([bds['variance'], bds['concentration']])
+            # Use variance and max_disparity as BDs
+            measures.append([bds['variance'], bds['max_disparity']])
         
         scheduler.tell(np.array(objectives), np.array(measures))
         
@@ -509,7 +506,7 @@ def create_visualizations(archive, metrics_history, config, output_path):
     plt.imshow(grid, origin='lower', aspect='auto', cmap='viridis', interpolation='nearest')
     plt.colorbar(label='Fitness (Accuracy)')
     plt.xlabel('BD1: Accuracy Variance')
-    plt.ylabel('BD2: Prediction Concentration')
+    plt.ylabel('BD2: Max Class Disparity')
     plt.title(f'{config.algorithm.upper()} QD Map - Coverage: {archive.stats.coverage*100:.1f}%')
     plt.tight_layout()
     plt.savefig(output_path / "qd_heatmap.png", dpi=300)
@@ -540,9 +537,9 @@ def create_visualizations(archive, metrics_history, config, output_path):
     
     axes[1, 1].scatter(df['measures_0'], df['measures_1'], c=df['objective'], 
                        cmap='viridis', alpha=0.6, s=20)
-    axes[1, 1].set_xlabel('BD1: Variance')
-    axes[1, 1].set_ylabel('BD2: Concentration')
-    axes[1, 1].set_title('Solution Distribution')
+    axes[1, 1].set_xlabel('BD1: Accuracy Variance')
+    axes[1, 1].set_ylabel('BD2: Max Class Disparity')
+    axes[1, 1].set_title('Solution Distribution (Color = Accuracy)')
     axes[1, 1].grid(True, alpha=0.3)
     
     plt.tight_layout()
@@ -560,7 +557,7 @@ def main():
     print("\nFITNESS: Overall Accuracy (to maximize)")
     print("BEHAVIOR DESCRIPTORS (no clear good/bad):")
     print("  - BD1: Accuracy Variance (class performance spread)")
-    print("  - BD2: Prediction Concentration (class preference)")
+    print("  - BD2: Max Class Disparity (largest gap between classes)")
     print("\n")
     
     # Configuration
