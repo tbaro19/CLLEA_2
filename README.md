@@ -102,29 +102,3 @@ python examples/qd_integration_example.py
 
 The documentation for the latest release is available on [readthedocs](https://libcll.readthedocs.io/en/latest/). Feedback, questions, and suggestions are highly encouraged. Contributions to improve the documentation are warmly welcomed and greatly appreciated!
 
-# Citing
-
-If you find this package useful, please cite both the original works associated with each strategy and the following:
-
-```
-@techreport{libcll2024,
-  author = {Nai-Xuan Ye and Tan-Ha Mai and Hsiu-Hsuan Wang and Wei-I Lin and Hsuan-Tien Lin},
-  title = {libcll: an Extendable Python Toolkit for Complementary-Label Learning},
-  institution = {National Taiwan University},
-  url = {https://github.com/ntucllab/libcll},
-  note = {available as arXiv preprint \url{https://arxiv.org/abs/2411.12276}},
-  month = nov,
-  year = 2024
-}
-```
-
-# Acknowledgment
-
-We would like to express our gratitude to the following repositories for sharing their code, which greatly facilitated the development of `libcll`:
-* [URE and FWD implementation](https://github.com/takashiishida/comp)
-* [DM official implementation](http://palm.seu.edu.cn/zhangml/Resources.htm#icml21b)
-* [OP official implementation](https://github.com/yzcao-nkg/OPCLL)
-* [SCARCE official implementation](https://github.com/wwangwitsel/SCARCE/tree/main)
-* [CLImage Dataset implementation](https://github.com/ntucllab/CLImage_Dataset)
-* [ACLImage Dataset implementation](https://github.com/yahcreepers/PAKDD_ACLImage_Dataset)
-* [Code structure](https://github.com/ntucllab/imbalanced-DL)
