@@ -1,0 +1,201 @@
+"""Provides the IsoLineEmitter."""
+
+from __future__ import annotations
+
+import numbers
+from collections.abc import Collection
+
+import numpy as np
+from numpy.typing import ArrayLike
+
+from ribs._utils import check_batch_shape, check_shape
+from ribs.archives import ArchiveBase
+from ribs.emitters._emitter_base import EmitterBase
+from ribs.typing import Float, Int
+
+
+class IsoLineEmitter(EmitterBase):
+    r"""Emits solutions by leveraging correlations between existing elites.
+
+    If the archive is empty and ``initial_solutions`` is set, a call to :meth:`ask` will
+    return ``initial_solutions``. If ``initial_solutions`` is not set, we draw solutions
+    from an isotropic Gaussian distribution centered at ``x0`` with standard deviation
+    ``iso_sigma``. Otherwise, to generate each new solution, the emitter selects a pair
+    of elites :math:`x_i` and :math:`x_j` and samples from
+
+    .. math::
+
+        x_i + \sigma_{iso} \mathcal{N}(0,\mathcal{I}) +
+            \sigma_{line}(x_j - x_i)\mathcal{N}(0,1)
+
+    This emitter is based on the Iso+LineDD operator presented in `Vassiliades 2018
+    <https://arxiv.org/abs/1804.03906>`_.
+
+    Args:
+        archive: Archive of solutions, e.g., :class:`ribs.archives.GridArchive`.
+        iso_sigma: Scale factor for the isotropic distribution used to generate
+            solutions.
+        line_sigma: Scale factor for the line distribution used when generating
+            solutions.
+        x0: Center of the Gaussian distribution from which to sample solutions when the
+            archive is empty. Must be 1-dimensional. This argument is ignored if
+            ``initial_solutions`` is set.
+        initial_solutions: An (n, solution_dim) array of solutions to be used when the
+            archive is empty. If this argument is None, then solutions will be sampled
+            from a Gaussian distribution centered at ``x0`` with standard deviation
+            ``iso_sigma``.
+        bounds: Bounds of the solution space. Pass None to indicate there are no bounds.
+            Alternatively, pass an array-like to specify the bounds for each dim. Each
+            element in this array-like can be None to indicate no bound, or a tuple of
+            ``(lower_bound, upper_bound)``, where ``lower_bound`` or ``upper_bound`` may
+            be None to indicate no bound. Unbounded upper bounds are set to +inf, and
+            unbounded lower bounds are set to -inf.
+        lower_bounds: Instead of specifying ``bounds``, ``lower_bounds`` and
+            ``upper_bounds`` may be specified. This is useful if, for instance,
+            solutions are multi-dimensional. Here, pass None to indicate there are no
+            bounds (i.e., bounds are set to -inf), or pass an array specifying the lower
+            bounds of the solution space.
+        upper_bounds: Upper bounds of the solution space; see ``lower_bounds`` above.
+            Pass None to indicate there are no bounds (i.e., bounds are set to inf).
+        batch_size: Number of solutions to return in :meth:`ask`.
+        seed: Value to seed the random number generator. Set to None to avoid a fixed
+            seed.
+
+    Raises:
+        ValueError: There is an error in x0 or initial_solutions.
+        ValueError: There is an error in the bounds configuration.
+    """
+
+    def __init__(
+        self,
+        archive: ArchiveBase,
+        *,
+        iso_sigma: Float = 0.01,
+        line_sigma: Float = 0.2,
+        x0: ArrayLike | None = None,
+        initial_solutions: ArrayLike | None = None,
+        bounds: Collection[tuple[None | Float, None | Float]] | None = None,
+        lower_bounds: ArrayLike | None = None,
+        upper_bounds: ArrayLike | None = None,
+        batch_size: Int = 64,
+        seed: Int | None = None,
+    ) -> None:
+        EmitterBase.__init__(
+            self,
+            archive,
+            solution_dim=archive.solution_dim,
+            bounds=bounds,
+            lower_bounds=lower_bounds,
+            upper_bounds=upper_bounds,
+        )
+
+        self._rng = np.random.default_rng(seed)
+        self._batch_size = batch_size
+        self._iso_sigma = np.asarray(iso_sigma, dtype=archive.dtypes["solution"])
+        self._line_sigma = np.asarray(line_sigma, dtype=archive.dtypes["solution"])
+        self._x0 = None
+        self._initial_solutions = None
+        self._noise_shape = (
+            (self.batch_size, self.solution_dim)
+            if isinstance(self.solution_dim, numbers.Integral)
+            else (self.batch_size, *self.solution_dim)
+        )
+
+        if x0 is None and initial_solutions is None:
+            raise ValueError("Either x0 or initial_solutions must be provided.")
+        if x0 is not None and initial_solutions is not None:
+            raise ValueError("x0 and initial_solutions cannot both be provided.")
+
+        if x0 is not None:
+            self._x0 = np.array(x0, dtype=archive.dtypes["solution"])
+            check_shape(self._x0, "x0", archive.solution_dim, "archive.solution_dim")
+        elif initial_solutions is not None:
+            self._initial_solutions = np.asarray(
+                initial_solutions, dtype=archive.dtypes["solution"]
+            )
+            check_batch_shape(
+                self._initial_solutions,
+                "initial_solutions",
+                archive.solution_dim,
+                "archive.solution_dim",
+            )
+
+    @property
+    def x0(self) -> np.ndarray | None:
+        """Initial Gaussian distribution center.
+
+        Solutions are sampled from this distribution when the archive is empty (if
+        :attr:`initial_solutions` is not set).
+        """
+        return self._x0
+
+    @property
+    def initial_solutions(self) -> np.ndarray | None:
+        """Returned when the archive is empty (if :attr:`x0` is not set)."""
+        return self._initial_solutions
+
+    @property
+    def iso_sigma(self) -> np.floating:
+        """Scale factor for the isotropic distribution."""
+        return self._iso_sigma
+
+    @property
+    def line_sigma(self) -> np.floating:
+        """Scale factor for the line distribution."""
+        return self._line_sigma
+
+    @property
+    def batch_size(self) -> Int:
+        """Number of solutions to return in :meth:`ask`."""
+        return self._batch_size
+
+    def _clip(self, solutions: np.ndarray) -> np.ndarray:
+        """Clips solutions to the bounds of the solution space."""
+        return np.clip(solutions, self.lower_bounds, self.upper_bounds)
+
+    def ask(self) -> np.ndarray:
+        r"""Generates ``batch_size`` solutions.
+
+        If the archive is empty and ``initial_solutions`` is set, a call to :meth:`ask`
+        will return ``initial_solutions``. If ``initial_solutions`` is not set, we draw
+        solutions from an isotropic Gaussian distribution centered at ``x0`` with
+        standard deviation ``iso_sigma``. Otherwise, to generate each new solution, the
+        emitter selects a pair of elites :math:`x_i` and :math:`x_j` and samples from
+
+        .. math::
+
+            x_i + \sigma_{iso} \mathcal{N}(0,\mathcal{I}) +
+                \sigma_{line}(x_j - x_i)\mathcal{N}(0,1)
+
+        Returns:
+            If the archive is not empty, ``(batch_size, solution_dim)`` array --
+            contains ``batch_size`` new solutions to evaluate. If the archive is empty,
+            we return ``initial_solutions``, which might not have ``batch_size``
+            solutions.
+        """
+        if self.archive.empty and self._initial_solutions is not None:
+            return self._clip(self.initial_solutions)
+
+        if self.archive.empty:
+            # Note: Since the parents are all `x0`, the `directions` below will
+            # all be 0.
+            parents = np.repeat(self.x0[None], repeats=2 * self.batch_size, axis=0)
+        else:
+            parents = self.archive.sample_elites(2 * self.batch_size)["solution"]
+
+        parents = parents.reshape(2, *self._noise_shape)
+        elites = parents[0]
+        directions = parents[1] - parents[0]
+
+        iso_gaussian = self._rng.normal(
+            scale=self.iso_sigma,
+            size=self._noise_shape,
+        ).astype(elites.dtype)
+        line_gaussian = self._rng.normal(
+            scale=self.line_sigma,
+            # Put enough ones to make the shapes match and broadcast properly.
+            size=(self.batch_size, *(1 for _ in range(len(self._noise_shape) - 1))),
+        ).astype(elites.dtype)
+
+        solutions = elites + iso_gaussian + line_gaussian * directions
+        return self._clip(solutions)
