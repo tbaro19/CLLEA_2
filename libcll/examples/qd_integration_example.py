@@ -254,8 +254,8 @@ def run_qd_optimization_for_cll(
     
     if len(df) > 0:
         # Extract measures
-        archive_accuracies = df["measure_0"].values
-        archive_variances = df["measure_1"].values
+        archive_accuracies = df["measures_0"].values
+        archive_variances = df["measures_1"].values
         archive_objectives = df["objective"].values
         
         # Plot QD map
@@ -304,19 +304,19 @@ def run_qd_optimization_for_cll(
         print("=" * 70)
         
         # Find generalists (low variance, high accuracy)
-        generalists = df[(df["measure_1"] < 0.02) & (df["measure_0"] > 0.75)]
+        generalists = df[(df["measures_1"] < 0.02) & (df["measures_0"] > 0.75)]
         print(f"Generalists (low variance, high accuracy): {len(generalists)}")
         if len(generalists) > 0:
-            print(f"  Best generalist accuracy: {generalists['measure_0'].max():.4f}")
+            print(f"  Best generalist accuracy: {generalists['measures_0'].max():.4f}")
         
         # Find specialists (high variance, high accuracy)
-        specialists = df[(df["measure_1"] > 0.05) & (df["measure_0"] > 0.75)]
+        specialists = df[(df["measures_1"] > 0.05) & (df["measures_0"] > 0.75)]
         print(f"Specialists (high variance, high accuracy): {len(specialists)}")
         if len(specialists) > 0:
-            print(f"  Best specialist accuracy: {specialists['measure_0'].max():.4f}")
+            print(f"  Best specialist accuracy: {specialists['measures_0'].max():.4f}")
         
         # Find balanced solutions
-        balanced = df[(df["measure_1"] >= 0.02) & (df["measure_1"] <= 0.05)]
+        balanced = df[(df["measures_1"] >= 0.02) & (df["measures_1"] <= 0.05)]
         print(f"Balanced solutions (moderate variance): {len(balanced)}")
         
         print()

@@ -442,11 +442,11 @@ def run_qd_algorithm(config: CMAQDConfig, output_dir: str = "qd_cma_output"):
         result_archive = scheduler.result_archive if hasattr(scheduler, 'result_archive') and scheduler.result_archive is not None else scheduler.archive
         stats = result_archive.stats
         
-        metrics_history['iteration'].append(itr)
-        metrics_history['coverage'].append(stats.coverage)
-        metrics_history['qd_score'].append(stats.qd_score)
-        metrics_history['best_fitness'].append(stats.obj_max)
-        metrics_history['mean_fitness'].append(stats.obj_mean)
+        metrics_history['iteration'].append(int(itr))
+        metrics_history['coverage'].append(float(stats.coverage))
+        metrics_history['qd_score'].append(float(stats.qd_score))
+        metrics_history['best_fitness'].append(float(stats.obj_max))
+        metrics_history['mean_fitness'].append(float(stats.obj_mean))
         
         if (itr + 1) % 10 == 0 or itr == 0:
             print(f"Iteration {itr + 1}/{config.num_iterations}")
@@ -499,8 +499,11 @@ def create_visualizations(archive, metrics_history, config, output_path):
     grid = np.full(config.grid_dims, np.nan)
     
     for _, row in df.iterrows():
-        idx_0 = int(row['index_0'])
-        idx_1 = int(row['index_1'])
+        # Convert integer index to grid coordinates
+        int_idx = int(row['index'])
+        grid_idx = archive.int_to_grid_index(np.array([int_idx]))[0]
+        idx_0 = int(grid_idx[0])
+        idx_1 = int(grid_idx[1])
         grid[idx_1, idx_0] = row['objective']
     
     plt.imshow(grid, origin='lower', aspect='auto', cmap='viridis', interpolation='nearest')
@@ -535,7 +538,7 @@ def create_visualizations(archive, metrics_history, config, output_path):
     axes[1, 0].legend()
     axes[1, 0].grid(True, alpha=0.3)
     
-    axes[1, 1].scatter(df['measure_0'], df['measure_1'], c=df['objective'], 
+    axes[1, 1].scatter(df['measures_0'], df['measures_1'], c=df['objective'], 
                        cmap='viridis', alpha=0.6, s=20)
     axes[1, 1].set_xlabel('BD1: Variance')
     axes[1, 1].set_ylabel('BD2: Concentration')

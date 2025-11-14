@@ -1,0 +1,17 @@
+======================================================================
+Quality Diversity Report: example_model
+======================================================================
+
+Objective Metrics:
+  Overall Accuracy: 0.8700
+
+Behavior Descriptors:
+  Accuracy Variance:  0.045000
+  Accuracy Std Dev:   0.212000
+  Max Disparity:      0.3500
+
+Class Performance:
+  Min Class Accuracy: 0.6800
+  Max Class Accuracy: 0.9600
+
+======================================================================
